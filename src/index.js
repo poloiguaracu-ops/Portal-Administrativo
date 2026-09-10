@@ -25,6 +25,11 @@ export default {
         new Request(new URL('/landing.html', request.url), request)
       );
       return new HTMLRewriter()
+        .on('.nav-links', {
+          element(el) {
+            el.append('<a href="#inscricao">Quer se inscrever?</a>', { html: true });
+          },
+        })
         .on('body', {
           element(el) {
             el.append(`
