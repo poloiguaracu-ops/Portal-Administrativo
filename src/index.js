@@ -25,6 +25,16 @@ export default {
         new Request(new URL('/landing.html', request.url), request)
       );
       return new HTMLRewriter()
+        .on('.nav-inner', {
+          element(el) {
+            el.prepend('<a href="/" aria-label="Instituto Educacional Canoa Grande" style="display:flex;align-items:center;flex:none;margin-right:4px"><img src="/instituto-logo.svg?v=1" alt="Instituto Educacional Canoa Grande" style="display:block;width:150px;height:78px;object-fit:contain;border-radius:10px"></a>', { html: true });
+          },
+        })
+        .on('.hero-card-inner', {
+          element(el) {
+            el.prepend('<div style="display:flex;justify-content:center;margin-bottom:18px"><img src="/instituto-logo.svg?v=1" alt="Instituto Educacional Canoa Grande" style="display:block;width:min(100%,360px);height:auto;border-radius:14px;box-shadow:0 12px 30px #0002"></div>', { html: true });
+          },
+        })
         .on('.nav-links', {
           element(el) {
             el.append('<a class="login subscribe-link" href="#inscricao" aria-label="Ir para inscrição">Quer se inscrever?</a>', { html: true });
@@ -47,6 +57,7 @@ export default {
 .course-dialog .course-price-box .price-call{font-size:28px;font-weight:900;margin:5px 0 6px}
 .course-dialog .course-price-box .price-text{font-size:15px;opacity:.95}
 .course-dialog .course-price-box a{display:inline-block;margin-top:14px;padding:11px 18px;border-radius:10px;background:#f57c18;color:#fff;text-decoration:none;font-weight:900}
+@media(max-width:700px){.nav-inner>a:first-child img{width:105px;height:58px}.nav-inner{gap:8px!important}}
 </style>
 <section style="background:#f8f5fb;padding:80px 22px;border-top:1px solid #e7e9ef" id="inscricao">
   <div style="max-width:900px;margin:0 auto;background:#fff;border:1px solid #e7e9ef;border-radius:20px;padding:36px;box-shadow:0 15px 40px #0000000d">
