@@ -60,7 +60,25 @@ export default {
       <p style="margin:0;text-align:center;color:#687083;font-size:12px">Ao enviar, será aberto o aplicativo de e-mail configurado no seu dispositivo para encaminhar a solicitação ao Instituto.</p>
     </form>
   </div>
-</section>`, { html: true });
+</section>
+<script>
+(function(){
+  function addPriceBox(){
+    const dialog=document.querySelector('.course-dialog');
+    if(!dialog || dialog.querySelector('.course-price-box')) return;
+    const grid=dialog.querySelector('.course-grid');
+    if(!grid) return;
+    const box=document.createElement('div');
+    box.className='course-price-box';
+    box.style.cssText='margin-top:18px;padding:20px;border-radius:16px;background:linear-gradient(135deg,#4f1d78,#6b2a94);color:#fff;text-align:center;box-shadow:0 14px 35px #4f1d7830';
+    box.innerHTML='<div style="font-size:12px;font-weight:900;letter-spacing:1px;text-transform:uppercase;opacity:.9">Valores do curso</div><div style="font-size:28px;font-weight:900;margin:5px 0 6px">Venha conferir!</div><div style="font-size:15px;opacity:.95">Consulte valores, condições de pagamento e informações da turma.</div><a href="https://wa.me/5544997239673" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:14px;padding:11px 18px;border-radius:10px;background:#f57c18;color:#fff;text-decoration:none;font-weight:900">WhatsApp: 44 99723-9673</a>';
+    grid.insertAdjacentElement('afterend',box);
+  }
+  const observer=new MutationObserver(addPriceBox);
+  observer.observe(document.body,{childList:true,subtree:true});
+  addPriceBox();
+})();
+</script>`, { html: true });
           },
         })
         .transform(page);
