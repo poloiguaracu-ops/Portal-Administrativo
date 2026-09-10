@@ -1,0 +1,11 @@
+src/
+.git/
+.github/
+wrangler.json
+wrangler.jsonc
+wrangler.toml
+.assetsignore
+database/
+node_modules/
+package.json
+package-lock.json
