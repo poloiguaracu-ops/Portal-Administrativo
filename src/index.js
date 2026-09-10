@@ -33,6 +33,21 @@ export default {
         .on('body', {
           element(el) {
             el.append(`
+<style>
+.course-dialog .course-price-box{
+  margin-top:18px;
+  padding:20px;
+  border-radius:16px;
+  background:linear-gradient(135deg,#4f1d78,#6b2a94);
+  color:#fff;
+  text-align:center;
+  box-shadow:0 14px 35px #4f1d7830;
+}
+.course-dialog .course-price-box strong{display:block;font-size:12px;font-weight:900;letter-spacing:1px;text-transform:uppercase;opacity:.9}
+.course-dialog .course-price-box .price-call{font-size:28px;font-weight:900;margin:5px 0 6px}
+.course-dialog .course-price-box .price-text{font-size:15px;opacity:.95}
+.course-dialog .course-price-box a{display:inline-block;margin-top:14px;padding:11px 18px;border-radius:10px;background:#f57c18;color:#fff;text-decoration:none;font-weight:900}
+</style>
 <section style="background:#f8f5fb;padding:80px 22px;border-top:1px solid #e7e9ef" id="inscricao">
   <div style="max-width:900px;margin:0 auto;background:#fff;border:1px solid #e7e9ef;border-radius:20px;padding:36px;box-shadow:0 15px 40px #0000000d">
     <div style="text-align:center;max-width:720px;margin:0 auto 30px">
@@ -70,8 +85,7 @@ export default {
     if(!grid) return;
     const box=document.createElement('div');
     box.className='course-price-box';
-    box.style.cssText='margin-top:18px;padding:20px;border-radius:16px;background:linear-gradient(135deg,#4f1d78,#6b2a94);color:#fff;text-align:center;box-shadow:0 14px 35px #4f1d7830';
-    box.innerHTML='<div style="font-size:12px;font-weight:900;letter-spacing:1px;text-transform:uppercase;opacity:.9">Valores do curso</div><div style="font-size:28px;font-weight:900;margin:5px 0 6px">Venha conferir!</div><div style="font-size:15px;opacity:.95">Consulte valores, condições de pagamento e informações da turma.</div><a href="https://wa.me/5544997239673" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:14px;padding:11px 18px;border-radius:10px;background:#f57c18;color:#fff;text-decoration:none;font-weight:900">WhatsApp: 44 99723-9673</a>';
+    box.innerHTML='<strong>Valores do curso</strong><div class="price-call">Venha conferir!</div><div class="price-text">Consulte valores, condições de pagamento e informações da turma.</div><a href="https://wa.me/5544997239673" target="_blank" rel="noopener noreferrer">WhatsApp: 44 99723-9673</a>';
     grid.insertAdjacentElement('afterend',box);
   }
   const observer=new MutationObserver(addPriceBox);
