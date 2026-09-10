@@ -1,4 +1,4 @@
--- Portal UniFIL Polo Iguaraçu
+-- Instituto Educacional Canoa Grande de Educação e Formação
 -- Banco de dados inicial para Cloudflare D1 (SQLite).
 -- Sem dados fictícios: somente estrutura.
 
