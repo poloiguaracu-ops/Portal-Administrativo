@@ -27,7 +27,7 @@ export default {
       return new HTMLRewriter()
         .on('.nav-links', {
           element(el) {
-            el.append('<a href="#inscricao">Quer se inscrever?</a>', { html: true });
+            el.append('<a class="login subscribe-link" href="#inscricao" aria-label="Ir para inscrição">Quer se inscrever?</a>', { html: true });
           },
         })
         .on('body', {
