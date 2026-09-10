@@ -20,6 +20,14 @@ export default {
       }
     }
 
+    if (url.pathname === '/' || url.pathname === '') {
+      return env.ASSETS.fetch(new Request(new URL('/landing.html', request.url), request));
+    }
+
+    if (url.pathname === '/login') {
+      return env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
+    }
+
     if (url.pathname.startsWith('/api/')) {
       return Response.json({ error: 'Rota ainda não implementada.' }, { status: 404 });
     }
