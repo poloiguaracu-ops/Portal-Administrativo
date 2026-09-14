@@ -2,35 +2,66 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    const json = (data, status = 200) => Response.json(data, {
+      status,
+      headers: {
+        'Cache-Control': 'no-store',
+      },
+    });
+
+    const securityHeaders = (response) => {
+      const headers = new Headers(response.headers);
+      headers.set('X-Content-Type-Options', 'nosniff');
+      headers.set('X-Frame-Options', 'SAMEORIGIN');
+      headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+      headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+      headers.set('X-XSS-Protection', '0');
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    };
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': url.origin,
+          'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
+    }
+
     if (url.pathname === '/api/health') {
+      if (request.method !== 'GET') return json({ error: 'Método não permitido.' }, 405);
       try {
         const result = await env.DB.prepare(
           "SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name"
         ).bind('table').all();
-        return Response.json({
+        return json({
           ok: true,
           database: 'connected',
           tables: result.results.map((r) => r.name),
+          timestamp: new Date().toISOString(),
         });
       } catch (error) {
-        return Response.json({ ok: false, error: String(error?.message || error) }, { status: 500 });
+        return json({ ok: false, database: 'error', error: String(error?.message || error) }, 500);
       }
     }
 
     if (url.pathname === '/login') {
-      return env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
+      return securityHeaders(await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request)));
     }
 
     if (url.pathname === '/' || url.pathname === '') {
       const page = await env.ASSETS.fetch(new Request(new URL('/landing.html', request.url), request));
-      return new HTMLRewriter()
+      return securityHeaders(new HTMLRewriter()
         .on('#courseModal', { element(el) { el.remove(); } })
         .on('.links a.purple', { element(el) { el.setAttribute('href', '/login'); } })
         .on('body', {
           element(el) {
             el.append(`
 <style>
-/* Correções de compatibilidade: course-details.js não deve alterar o layout da landing. */
+/* Compatibilidade da landing com course-details.js */
 .nav{background:rgba(255,255,255,.97)!important;border-bottom:1px solid rgba(42,11,73,.09)!important;box-shadow:none!important}
 .navin{min-height:78px!important;padding:0!important}
 .links{display:flex!important;align-items:center!important;gap:4px!important}
@@ -56,22 +87,18 @@ footer{background:#150622!important}
 </style>
 <script>
 (() => {
-  const fixAccessLink = () => {
-    document.querySelectorAll('.links a').forEach((a) => {
-      if (a.textContent.trim().toLowerCase().includes('área de acesso')) a.setAttribute('href','/login');
-    });
-  };
-  const addPriceBox = () => {
-    document.querySelectorAll('.course-dialog').forEach((dialog) => {
-      if (dialog.querySelector('.course-price-box')) return;
-      const grid = dialog.querySelector('.course-grid');
-      if (!grid) return;
-      const box = document.createElement('div');
-      box.className = 'course-price-box';
-      box.innerHTML = '<strong>Valores do curso</strong><div class="price-call">Venha conferir!</div><div class="price-text">Consulte valores, condições de pagamento e informações da turma.</div><a href="https://wa.me/5544997239673" target="_blank" rel="noopener noreferrer">WhatsApp: 44 99723-9673</a>';
-      grid.insertAdjacentElement('afterend', box);
-    });
-  };
+  const fixAccessLink = () => document.querySelectorAll('.links a').forEach((a) => {
+    if (a.textContent.trim().toLowerCase().includes('área de acesso')) a.setAttribute('href','/login');
+  });
+  const addPriceBox = () => document.querySelectorAll('.course-dialog').forEach((dialog) => {
+    if (dialog.querySelector('.course-price-box')) return;
+    const grid = dialog.querySelector('.course-grid');
+    if (!grid) return;
+    const box = document.createElement('div');
+    box.className = 'course-price-box';
+    box.innerHTML = '<strong>Valores do curso</strong><div class="price-call">Venha conferir!</div><div class="price-text">Consulte valores, condições de pagamento e informações da turma.</div><a href="https://wa.me/5544997239673" target="_blank" rel="noopener noreferrer">WhatsApp: 44 99723-9673</a>';
+    grid.insertAdjacentElement('afterend', box);
+  });
   fixAccessLink();
   addPriceBox();
   new MutationObserver(() => { fixAccessLink(); addPriceBox(); }).observe(document.body, { childList:true, subtree:true });
@@ -79,13 +106,19 @@ footer{background:#150622!important}
 </script>`, { html: true });
           },
         })
-        .transform(page);
+        .transform(page));
     }
 
     if (url.pathname.startsWith('/api/')) {
-      return Response.json({ error: 'Rota ainda não implementada.' }, { status: 404 });
+      return json({ error: 'Rota não encontrada.' }, 404);
     }
 
-    return env.ASSETS.fetch(request);
+    // Arquivos internos nunca devem ser publicados pelo Worker de Assets.
+    const blocked = ['/src/', '/database/', '/migrations/', '/wrangler.jsonc'];
+    if (blocked.some((prefix) => url.pathname === prefix || url.pathname.startsWith(prefix))) {
+      return new Response('Not Found', { status: 404 });
+    }
+
+    return securityHeaders(await env.ASSETS.fetch(request));
   },
 };
