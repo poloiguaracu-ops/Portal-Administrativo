@@ -1,18 +1,12 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "portal-administrativo",
-  "main": "src/index.js",
-  "compatibility_date": "2026-09-10",
-  "assets": {
-    "directory": ".",
-    "binding": "ASSETS",
-    "run_worker_first": ["/", "/login", "/api/*"]
+  "$schema":"./node_modules/wrangler/config-schema.json",
+  "name":"portal-administrativo",
+  "main":"src/index.js",
+  "compatibility_date":"2026-09-10",
+  "assets":{
+    "directory":".",
+    "binding":"ASSETS",
+    "run_worker_first":["/","/login","/site","/admin","/administrativo","/instituto","/portal","/instituto-oficial.html","/portal-administrativo.html","/api/*"]
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "portal-administrativo",
-      "database_id": "27511109-02e3-4068-8474-1f373bd81a53"
-    }
-  ]
+  "d1_databases":[{"binding":"DB","database_name":"portal-administrativo","database_id":"27511109-02e3-4068-8474-1f373bd81a53"}]
 }
