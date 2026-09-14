@@ -22,6 +22,10 @@
       v6.src = '/portal-v6.js?v=6';
       v6.defer = true;
       document.body.appendChild(v6);
+      const pro = document.createElement('script');
+      pro.src = '/portal-pro.js?v=1';
+      pro.defer = true;
+      document.body.appendChild(pro);
     }
 
     if (isInstituto) {
