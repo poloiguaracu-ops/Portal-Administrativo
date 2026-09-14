@@ -35,11 +35,22 @@ export default {
     };
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': url.origin, 'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' } });
 
-    // Entry-point strategy: path aliases are ready now; hostname aliases make custom domains easy to attach later.
-    const isAdminHost = host === 'portal.institutocanogrande.com.br' || host === 'admin.institutocanogrande.com.br';
-    const isPublicHost = host === 'institutocanogrande.com.br' || host === 'www.institutocanogrande.com.br';
-    if (url.pathname === '/' && isAdminHost) return Response.redirect(new URL('/portal', url), 302);
-    if (url.pathname === '/' && isPublicHost) return Response.redirect(new URL('/instituto', url), 302);
+    const publicHosts = new Set(['institutocanogrande.com.br','www.institutocanogrande.com.br']);
+    const adminHosts = new Set(['portal.institutocanogrande.com.br','admin.institutocanogrande.com.br']);
+    if (publicHosts.has(host)) {
+      if (url.pathname === '/' || url.pathname === '/instituto' || url.pathname === '/site' || url.pathname === '/home') {
+        const page = await env.ASSETS.fetch(new Request(new URL('/landing.html', request.url), request));
+        return injectEnhancements(page,'landing');
+      }
+      if (url.pathname === '/portal' || url.pathname === '/admin' || url.pathname === '/login') return Response.redirect(new URL('https://portal.institutocanogrande.com.br/', request.url), 302);
+    }
+    if (adminHosts.has(host)) {
+      if (url.pathname === '/' || url.pathname === '/portal' || url.pathname === '/admin' || url.pathname === '/administrativo' || url.pathname === '/login') {
+        const page = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
+        return injectEnhancements(page,'portal');
+      }
+      if (url.pathname === '/instituto' || url.pathname === '/site') return Response.redirect(new URL('https://institutocanogrande.com.br/', request.url), 302);
+    }
 
     if (url.pathname === '/index.html') return Response.redirect(new URL('/portal', url), 301);
     if (url.pathname === '/landing.html') return Response.redirect(new URL('/instituto', url), 301);
@@ -49,6 +60,10 @@ export default {
     if (url.pathname === '/site') return Response.redirect(new URL('/instituto', url), 302);
     if (url.pathname === '/admin') return Response.redirect(new URL('/portal', url), 302);
     if (url.pathname === '/administrativo') return Response.redirect(new URL('/portal', url), 302);
+    if (url.pathname === '/instituto-oficial.html') return Response.redirect(new URL('/instituto', url), 301);
+    if (url.pathname === '/portal-administrativo.html') return Response.redirect(new URL('/portal', url), 301);
+    if (url.pathname === '/portal-publico') return Response.redirect(new URL('/instituto', url), 301);
+    if (url.pathname === '/portal-interno') return Response.redirect(new URL('/portal', url), 301);
     if (url.pathname === '/portal') { const page=await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request)); return injectEnhancements(page,'portal'); }
     if (url.pathname === '/instituto') { const page=await env.ASSETS.fetch(new Request(new URL('/landing.html',request.url),request)); return injectEnhancements(page,'landing'); }
     if (url.pathname === '/api/health') {
