@@ -3,6 +3,7 @@
   const ready = (fn) => document.readyState === 'loading'
     ? document.addEventListener('DOMContentLoaded', fn, { once: true })
     : fn();
+  const asset = (name) => new URL('/Portal-Administrativo/public/' + name, document.baseURI).href;
 
   ready(() => {
     const isPortal = !!document.querySelector('.portal, .sidebar, .main, .login, .setup-card');
@@ -12,33 +13,23 @@
     if (isPortal) {
       const visual = document.createElement('link');
       visual.rel = 'stylesheet';
-      visual.href = '/public/portal-visual-v4.css?v=4';
+      visual.href = asset('portal-visual-v4.css?v=4');
       document.head.appendChild(visual);
-      const v5 = document.createElement('script');
-      v5.src = '/public/portal-ui-v5.js?v=5';
-      v5.defer = true;
-      document.body.appendChild(v5);
-      const v6 = document.createElement('script');
-      v6.src = '/public/portal-v6.js?v=6';
-      v6.defer = true;
-      document.body.appendChild(v6);
-      const pro = document.createElement('script');
-      pro.src = '/public/portal-pro.js?v=1';
-      pro.defer = true;
-      document.body.appendChild(pro);
+      ['portal-ui-v5.js?v=5','portal-v6.js?v=6','portal-pro.js?v=1'].forEach(src => {
+        const s = document.createElement('script');
+        s.src = asset(src);
+        s.defer = true;
+        document.body.appendChild(s);
+      });
     }
 
     if (isInstituto) {
-      const instituto = document.createElement('script');
-      instituto.src = '/public/instituto-pro.js?v=1';
-      instituto.defer = true;
-      document.body.appendChild(instituto);
-      document.querySelectorAll('.course-item strong').forEach(el => {
-        if (el.textContent.trim() === '') el.textContent = 'Formação';
-      });
-      document.querySelectorAll('.chip').forEach(el => {
-        if (el.textContent.includes('44 formações')) el.textContent = el.textContent.replace('44 formações', '45 formações');
-      });
+      const s = document.createElement('script');
+      s.src = asset('instituto-pro.js?v=2');
+      s.defer = true;
+      document.body.appendChild(s);
+      document.querySelectorAll('.course-item strong').forEach(el => { if (!el.textContent.trim()) el.textContent = 'Formação'; });
+      document.querySelectorAll('.chip').forEach(el => { if (el.textContent.includes('44 formações')) el.textContent = el.textContent.replace('44 formações', '45 formações'); });
     }
 
     const style = document.createElement('style');
@@ -55,23 +46,16 @@
 
     window.iecgToast = (message, title='Instituto Canoa Grande') => {
       document.querySelectorAll('.iecg-toast').forEach(x => x.remove());
-      const t = document.createElement('div');
-      t.className = 'iecg-toast';
-      const s = document.createElement('strong');
-      s.textContent = title;
-      const p = document.createElement('span');
-      p.textContent = message;
-      t.append(s, p);
-      document.body.appendChild(t);
-      setTimeout(() => t.remove(), 4200);
+      const t = document.createElement('div'); t.className = 'iecg-toast';
+      const s = document.createElement('strong'); s.textContent = title;
+      const p = document.createElement('span'); p.textContent = message;
+      t.append(s, p); document.body.appendChild(t); setTimeout(() => t.remove(), 4200);
     };
 
     document.querySelectorAll('a[href="#"]').forEach(a => a.addEventListener('click', e => e.preventDefault()));
-
     document.querySelectorAll('a[href*="wa.me/5544997239673"]').forEach(a => {
       if (!a.href.includes('text=')) a.href = 'https://wa.me/5544997239673?text=' + encodeURIComponent('Olá! Gostaria de saber mais sobre o Instituto Educacional Canoa Grande de Educação e Formação.');
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
+      a.target = '_blank'; a.rel = 'noopener noreferrer';
     });
 
     document.querySelectorAll('form').forEach(form => {
@@ -81,13 +65,9 @@
         form.dataset.iecgEnhanced = '1';
         form.addEventListener('submit', e => {
           e.preventDefault();
-          const data = new FormData(form);
           const parts = [];
-          for (const [key, value] of data.entries()) {
-            if (String(value).trim()) parts.push(`${key}: ${value}`);
-          }
-          const msg = 'Olá! Quero informações sobre as formações do Instituto Canoa Grande.\n' + parts.join('\n');
-          window.open('https://wa.me/5544997239673?text=' + encodeURIComponent(msg), '_blank', 'noopener');
+          for (const [key, value] of new FormData(form).entries()) if (String(value).trim()) parts.push(`${key}: ${value}`);
+          window.open('https://wa.me/5544997239673?text=' + encodeURIComponent('Olá! Quero informações sobre as formações do Instituto Canoa Grande.\n' + parts.join('\n')), '_blank', 'noopener');
           window.iecgToast('Sua solicitação foi preparada para o WhatsApp.');
         });
       }
