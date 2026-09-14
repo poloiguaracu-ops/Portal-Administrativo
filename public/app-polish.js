@@ -5,6 +5,7 @@
     document.documentElement.classList.add('iecg-ready');
     const visual=document.createElement('link'); visual.rel='stylesheet'; visual.href='/portal-visual-v4.css?v=4'; document.head.appendChild(visual);
     const v5=document.createElement('script'); v5.src='/portal-ui-v5.js?v=5'; v5.defer=true; document.body.appendChild(v5);
+    const v6=document.createElement('script'); v6.src='/portal-v6.js?v=6'; v6.defer=true; document.body.appendChild(v6);
     const style = document.createElement('style');
     style.textContent = `
       :root{--iecg-purple:#2a0b49;--iecg-purple-2:#6b2a94;--iecg-orange:#ff7400;--iecg-bg:#f7f5f9}
