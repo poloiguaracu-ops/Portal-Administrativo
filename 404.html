@@ -3,18 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Página não encontrada</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f6f9;color:#242833;font-family:Inter,Segoe UI,Arial,sans-serif}.box{width:min(620px,calc(100% - 32px));background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:34px;box-shadow:0 20px 60px #0001;text-align:center}h1{margin:0 0 10px;color:#54207f}p{color:#6b7280;line-height:1.6}.actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px}a{padding:13px 18px;border-radius:10px;text-decoration:none;font-weight:800}.inst{background:#f97316;color:#fff}.port{background:#54207f;color:#fff}.home{background:#eef0f3;color:#242833}</style>
+<meta name="robots" content="noindex">
+<title>Instituto Canoa Grande — Página não encontrada</title>
+<style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#f7f3fb,#fff7ef);color:#242833;font-family:Inter,Segoe UI,Arial,sans-serif;padding:20px}.box{width:min(680px,100%);background:#fff;border:1px solid #e5e7eb;border-radius:24px;padding:38px;box-shadow:0 25px 80px rgba(35,12,48,.12);text-align:center}h1{margin:0 0 10px;color:#54207f;font-size:34px}p{color:#6b7280;line-height:1.65;margin:0}.actions{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:25px}a{padding:14px 18px;border-radius:12px;text-decoration:none;font-weight:900} .inst{background:#f97316;color:#fff}.port{background:#54207f;color:#fff}.repo{background:#eef0f4;color:#242833;grid-column:1/-1}@media(max-width:620px){.actions{grid-template-columns:1fr}.repo{grid-column:auto}}
+</style>
 </head>
 <body>
 <div class="box">
-  <h1>Página não encontrada</h1>
-  <p>O endereço informado não existe nesta publicação. Use um dos acessos oficiais abaixo.</p>
-  <div class="actions">
-    <a class="inst" href="/Portal-Administrativo/instituto/">Site do Instituto</a>
-    <a class="port" href="/Portal-Administrativo/portal/">Portal Administrativo</a>
-    <a class="home" href="/Portal-Administrativo/">Início</a>
-  </div>
+  <h1>Ops, esta página não existe.</h1>
+  <p>Escolha o acesso correto. O sistema identifica automaticamente se está sendo usado pelo GitHub Pages ou por um domínio próprio.</p>
+  <div class="actions" id="actions"></div>
 </div>
+<script>
+const base=location.pathname.startsWith('/Portal-Administrativo/')?'/Portal-Administrativo/':'/';
+document.getElementById('actions').innerHTML=`<a class="inst" href="${base}instituto/">Site do Instituto</a><a class="port" href="${base}portal/">Portal Administrativo</a><a class="repo" href="https://github.com/poloiguaracu-ops/Portal-Administrativo">Abrir repositório</a>`;
+</script>
 </body>
 </html>
