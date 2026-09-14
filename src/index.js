@@ -1,6 +1,7 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const host = url.hostname.toLowerCase();
     const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store, max-age=0' } });
     const securityHeaders = (response) => {
       const headers = new Headers(response.headers);
@@ -33,11 +34,21 @@ export default {
         .transform(page));
     };
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': url.origin, 'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' } });
+
+    // Entry-point strategy: path aliases are ready now; hostname aliases make custom domains easy to attach later.
+    const isAdminHost = host === 'portal.institutocanogrande.com.br' || host === 'admin.institutocanogrande.com.br';
+    const isPublicHost = host === 'institutocanogrande.com.br' || host === 'www.institutocanogrande.com.br';
+    if (url.pathname === '/' && isAdminHost) return Response.redirect(new URL('/portal', url), 302);
+    if (url.pathname === '/' && isPublicHost) return Response.redirect(new URL('/instituto', url), 302);
+
     if (url.pathname === '/index.html') return Response.redirect(new URL('/portal', url), 301);
     if (url.pathname === '/landing.html') return Response.redirect(new URL('/instituto', url), 301);
     if (url.pathname === '/') return Response.redirect(new URL('/instituto', url), 302);
     if (url.pathname === '/login') return Response.redirect(new URL('/portal', url), 302);
     if (url.pathname === '/landing') return Response.redirect(new URL('/instituto', url), 302);
+    if (url.pathname === '/site') return Response.redirect(new URL('/instituto', url), 302);
+    if (url.pathname === '/admin') return Response.redirect(new URL('/portal', url), 302);
+    if (url.pathname === '/administrativo') return Response.redirect(new URL('/portal', url), 302);
     if (url.pathname === '/portal') { const page=await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request)); return injectEnhancements(page,'portal'); }
     if (url.pathname === '/instituto') { const page=await env.ASSETS.fetch(new Request(new URL('/landing.html',request.url),request)); return injectEnhancements(page,'landing'); }
     if (url.pathname === '/api/health') {
