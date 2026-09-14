@@ -12,27 +12,33 @@
     if (isPortal) {
       const visual = document.createElement('link');
       visual.rel = 'stylesheet';
-      visual.href = '/portal-visual-v4.css?v=4';
+      visual.href = '/public/portal-visual-v4.css?v=4';
       document.head.appendChild(visual);
       const v5 = document.createElement('script');
-      v5.src = '/portal-ui-v5.js?v=5';
+      v5.src = '/public/portal-ui-v5.js?v=5';
       v5.defer = true;
       document.body.appendChild(v5);
       const v6 = document.createElement('script');
-      v6.src = '/portal-v6.js?v=6';
+      v6.src = '/public/portal-v6.js?v=6';
       v6.defer = true;
       document.body.appendChild(v6);
       const pro = document.createElement('script');
-      pro.src = '/portal-pro.js?v=1';
+      pro.src = '/public/portal-pro.js?v=1';
       pro.defer = true;
       document.body.appendChild(pro);
     }
 
     if (isInstituto) {
       const instituto = document.createElement('script');
-      instituto.src = '/instituto-pro.js?v=1';
+      instituto.src = '/public/instituto-pro.js?v=1';
       instituto.defer = true;
       document.body.appendChild(instituto);
+      document.querySelectorAll('.course-item strong').forEach(el => {
+        if (el.textContent.trim() === '') el.textContent = 'Formação';
+      });
+      document.querySelectorAll('.chip').forEach(el => {
+        if (el.textContent.includes('44 formações')) el.textContent = el.textContent.replace('44 formações', '45 formações');
+      });
     }
 
     const style = document.createElement('style');
