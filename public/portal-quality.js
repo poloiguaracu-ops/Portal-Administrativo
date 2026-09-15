@@ -7,6 +7,14 @@
   ready(() => {
     if (!document.querySelector('.app, .portal, #login, #setup')) return;
 
+    const style = document.createElement('style');
+    style.textContent = `
+      .iecg-local-mode{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding:10px 13px;border:1px solid #eadcf0;border-radius:13px;background:linear-gradient(180deg,#fff,#fbf8fd);color:#66546f;font:700 11px/1.4 Inter,Segoe UI,Arial,sans-serif;box-shadow:0 5px 18px rgba(44,15,58,.04)}
+      .iecg-local-mode span:first-child{color:#b45309;font-size:10px}.iecg-local-mode b{color:#4d176e}.iecg-quality-toast{position:fixed;right:18px;bottom:18px;z-index:99999;max-width:min(420px,calc(100vw - 36px));padding:13px 15px;border-radius:13px;background:#24152d;color:#fff;box-shadow:0 18px 45px rgba(0,0,0,.24);font:600 12px/1.45 Inter,Segoe UI,Arial,sans-serif}
+      @media(max-width:760px){.iecg-local-mode{align-items:flex-start;flex-wrap:wrap;font-size:10px}}
+    `;
+    document.head.appendChild(style);
+
     const toast = (message, kind = 'info') => {
       if (typeof window.iecgToast === 'function') {
         window.iecgToast(message, kind === 'error' ? 'Atenção' : kind === 'ok' ? 'Tudo certo' : 'Portal Administrativo');
