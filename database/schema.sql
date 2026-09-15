@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS classes (
   classroom TEXT,
   status TEXT NOT NULL DEFAULT 'ativa' CHECK (status IN ('ativa','encerrada','cancelada')),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
   FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE SET NULL
 );
@@ -168,6 +169,7 @@ CREATE TABLE IF NOT EXISTS lessons (
   content_url TEXT,
   lesson_date TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
 );
 
@@ -213,7 +215,9 @@ CREATE INDEX IF NOT EXISTS idx_financial_student ON financial_entries(student_id
 CREATE INDEX IF NOT EXISTS idx_financial_status ON financial_entries(status);
 CREATE INDEX IF NOT EXISTS idx_financial_due_date ON financial_entries(due_date);
 CREATE INDEX IF NOT EXISTS idx_classes_teacher ON classes(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_classes_status ON classes(status);
 CREATE INDEX IF NOT EXISTS idx_lessons_class ON lessons(class_id);
+CREATE INDEX IF NOT EXISTS idx_lessons_date ON lessons(lesson_date);
 CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
