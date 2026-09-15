@@ -32,25 +32,24 @@
       if (!document.querySelector('link[data-iecg="portal-visual"]')) {
         const visual = document.createElement('link');
         visual.rel = 'stylesheet';
-        visual.href = asset('portal-visual-v4.css?v=5');
+        visual.href = asset('portal-visual-v4.css?v=6');
         visual.dataset.iecg = 'portal-visual';
         document.head.appendChild(visual);
       }
-      addScriptOnce('portal-ui-v5.js?v=6', 'portal-ui');
-      addScriptOnce('portal-v6.js?v=7', 'portal-v6');
-      addScriptOnce('portal-pro.js?v=2', 'portal-pro');
-      addScriptOnce('portal-super-polish.css?v=1', 'portal-super-polish');
+      addScriptOnce('portal-ui-v5.js?v=7', 'portal-ui');
+      addScriptOnce('portal-v6.js?v=8', 'portal-v6');
+      addScriptOnce('portal-pro.js?v=3', 'portal-pro');
+      addScriptOnce('portal-quality.js?v=1', 'portal-quality');
 
-      // Corrige textos que poderiam sugerir uma conexão com D1 que ainda não existe.
       setText('.live', '● Modo local de demonstração');
       setText('.pill', 'ACESSO AO PORTAL');
       document.querySelectorAll('.hint').forEach((el) => {
-        if ((el.textContent || '').toLowerCase().includes('perf') && (el.textContent || '').toLowerCase().includes('suport')) {
+        const text = (el.textContent || '').toLowerCase();
+        if (text.includes('perf') && text.includes('suport')) {
           el.textContent = 'Perfis disponíveis: Administrador, Professor e Aluno.';
         }
       });
 
-      // Evita modal preso por erro de clique e permite fechar com Esc ou clique no fundo.
       const closeModals = () => {
         document.querySelectorAll('.modal.show').forEach((modal) => {
           modal.classList.remove('show');
@@ -68,17 +67,17 @@
         });
       });
 
-      // Impede submits acidentais em formulários sem ação definida.
       document.querySelectorAll('form').forEach((form) => {
         form.addEventListener('submit', (event) => {
           const action = (form.getAttribute('action') || '').trim();
           if (!action && !form.querySelector('button[type="submit"][data-allow-submit]')) {
-            event.preventDefault();
+            // Forms controlled entirely by JavaScript are allowed when they have an explicit handler.
+            const hasHandler = form.id === 'f' || /onsubmit|handle|submit/i.test(form.outerHTML);
+            if (!hasHandler) event.preventDefault();
           }
         }, { capture: true });
       });
 
-      // Cria uma pequena faixa de estado, sem fingir que há sincronização em nuvem.
       if (!document.querySelector('.iecg-mode-note')) {
         const note = document.createElement('div');
         note.className = 'iecg-mode-note';
