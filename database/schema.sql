@@ -94,6 +94,10 @@ CREATE TABLE IF NOT EXISTS enrollments (
   enrollment_number TEXT UNIQUE,
   start_date TEXT,
   end_date TEXT,
+  monthly_amount REAL,
+  total_course_amount REAL,
+  installment_count INTEGER,
+  discount_percent REAL,
   status TEXT NOT NULL DEFAULT 'ativa' CHECK (status IN ('pre_cadastro','pendente','ativa','trancada','concluida','cancelada')),
   notes TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -190,10 +194,26 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_students_status ON students(status);
 CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollments(student_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_status ON enrollments(status);
 CREATE INDEX IF NOT EXISTS idx_financial_student ON financial_entries(student_id);
 CREATE INDEX IF NOT EXISTS idx_financial_status ON financial_entries(status);
+CREATE INDEX IF NOT EXISTS idx_financial_due_date ON financial_entries(due_date);
 CREATE INDEX IF NOT EXISTS idx_classes_teacher ON classes(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_lessons_class ON lessons(class_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
