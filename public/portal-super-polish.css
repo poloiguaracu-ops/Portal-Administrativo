@@ -1,0 +1,32 @@
+/* Refinamento visual global — Portal Administrativo */
+:root{
+  --sp-radius:20px;
+  --sp-shadow:0 18px 50px rgba(44,15,58,.08);
+  --sp-border:#e8e0ec;
+}
+body{letter-spacing:.01em}
+.sidebar{scrollbar-width:thin}
+.sidebar::-webkit-scrollbar{width:7px}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:99px}
+.main{max-width:1720px;margin-right:auto}
+.topbar{min-height:72px}
+.topbar:after{content:"";position:absolute;left:0;right:0;bottom:7px;height:1px;background:linear-gradient(90deg,rgba(77,23,110,.16),rgba(245,106,19,.12),transparent)}
+.metric,.panel,.auth-card{position:relative;overflow:hidden}
+.metric:after{content:"";position:absolute;right:-30px;top:-30px;width:110px;height:110px;border-radius:50%;background:radial-gradient(circle,rgba(245,106,19,.13),transparent 68%);pointer-events:none}
+.metric:hover{transform:translateY(-3px);box-shadow:0 22px 48px rgba(44,15,58,.11)}
+.panel:hover{box-shadow:0 20px 48px rgba(44,15,58,.10)}
+.metric,.panel,.quick button,.btn,.nav button,.user-chip{transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease}
+.quick button:hover{box-shadow:0 12px 30px rgba(44,15,58,.09)}
+.nav button:hover{transform:translateX(2px)}
+.btn.primary:hover{box-shadow:0 16px 32px rgba(245,106,19,.28)}
+.table-wrap{box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}
+.table tbody tr{transition:background .14s ease,transform .14s ease}
+.table tbody tr:hover{background:#fcf8fe;transform:translateX(2px)}
+.status-cell{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:999px;font-size:10px;font-weight:900}
+.status-cell.ok{background:#effaf2;color:#15803d}
+.status-cell.warn{background:#fff7e7;color:#b45309}
+.status-cell.danger{background:#fff0ef;color:#b42318}
+.empty{background:linear-gradient(180deg,#fff,#fcf9fd)}
+.search:focus-visible,.field input:focus-visible,.field select:focus-visible,.field textarea:focus-visible,.btn:focus-visible,.nav button:focus-visible{outline:3px solid rgba(245,106,19,.22);outline-offset:2px}
+@media(max-width:760px){.topbar{min-height:auto}.metric:hover,.panel:hover,.quick button:hover{transform:none}.table tbody tr:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
