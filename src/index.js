@@ -99,13 +99,16 @@ export default {
     const inject=async(page,mode)=>{if(!page.ok)return security(page);const out=new HTMLRewriter().on('body',{element(el){el.append('<script src="/app-polish.js" defer></script>',{html:true});if(mode==='portal')el.append('<script src="/portal-dashboard-pro.js" defer></script>',{html:true});}}).transform(page);return security(out);};
     if(publicHosts.has(host)){if(['/','/instituto','/site','/home'].includes(url.pathname))return inject(await env.ASSETS.fetch(new Request(new URL('/landing.html',request.url),request)),'landing');if(['/portal','/admin','/login'].includes(url.pathname))return Response.redirect('https://portal.institutocanogrande.com.br/',302);}
     if(adminHosts.has(host)){if(['/','/portal','/admin','/administrativo','/login'].includes(url.pathname))return inject(await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request)),'portal');if(['/instituto','/site'].includes(url.pathname))return Response.redirect('https://institutocanogrande.com.br/',302);}
-    if(url.pathname==='/index.html')return Response.redirect(new URL('/portal',url),301);
-    if(url.pathname==='/landing.html')return Response.redirect(new URL('/instituto',url),301);
-    if(url.pathname==='/')return Response.redirect(new URL('/instituto',url),302);
-    if(url.pathname==='/login')return Response.redirect(new URL('/portal',url),302);
-    if(url.pathname==='/portal')return inject(await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request)),'portal');
-    if(url.pathname==='/instituto')return inject(await env.ASSETS.fetch(new Request(new URL('/landing.html',request.url),request)),'landing');
-    const blocked=['/src/','/database/','/migrations/','/wrangler.jsonc','/.git/'];if(blocked.some(x=>url.pathname===x||url.pathname.startsWith(x)))return security(new Response('Not Found',{status:404}));
+    const publicRoute=url.pathname;
+    if(publicRoute==='/site-publico'||publicRoute==='/publico'||publicRoute==='/site-publico.html')return inject(await env.ASSETS.fetch(new Request(new URL('/landing.html',request.url),request)),'landing');
+    if(publicRoute==='/portal-administrativo'||publicRoute==='/portal-admin'||publicRoute==='/portal-administrativo.html')return inject(await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request)),'portal');
+    if(publicRoute==='/index.html')return Response.redirect(new URL('/portal-administrativo',url),301);
+    if(publicRoute==='/landing.html')return Response.redirect(new URL('/site-publico',url),301);
+    if(publicRoute==='/')return Response.redirect(new URL('/site-publico',url),302);
+    if(publicRoute==='/login')return Response.redirect(new URL('/portal-administrativo',url),302);
+    if(publicRoute==='/portal')return Response.redirect(new URL('/portal-administrativo',url),301);
+    if(publicRoute==='/instituto')return Response.redirect(new URL('/site-publico',url),301);
+    const blocked=['/src/','/database/','/migrations/','/wrangler.jsonc','/.git/'];if(blocked.some(x=>publicRoute===x||publicRoute.startsWith(x)))return security(new Response('Not Found',{status:404}));
     const asset=await env.ASSETS.fetch(request);return asset.status===404?security(new Response('Página não encontrada.',{status:404,headers:{'Content-Type':'text/plain; charset=utf-8'}})):security(asset);
   }
 };
