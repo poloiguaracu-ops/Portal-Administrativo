@@ -2,54 +2,249 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const host = url.hostname.toLowerCase();
-    const json = (data, status = 200, extra = {}) => Response.json(data, { status, headers: { 'Cache-Control':'no-store, max-age=0', ...extra } });
-    const security = (response) => { const h = new Headers(response.headers); h.set('X-Content-Type-Options','nosniff'); h.set('X-Frame-Options','SAMEORIGIN'); h.set('Referrer-Policy','strict-origin-when-cross-origin'); h.set('Permissions-Policy','camera=(), microphone=(), geolocation=()'); h.set('Cross-Origin-Opener-Policy','same-origin'); h.set('Cross-Origin-Resource-Policy','same-origin'); return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h}); };
-    const readJson = async()=>{try{return await request.json()}catch(_){return{}}};
-    const hex = buf => [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
-    const bytes = hexstr => Uint8Array.from(hexstr.match(/.{1,2}/g)||[],x=>parseInt(x,16));
-    const sha256 = async text => hex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)));
-    const randomToken = () => { const a=new Uint8Array(32); crypto.getRandomValues(a); return hex(a); };
-    const passwordHash = async password => { const a=new Uint8Array(16);crypto.getRandomValues(a);const salt=hex(a);const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:bytes(salt),iterations:120000,hash:'SHA-256'},key,256);return `pbkdf2$120000$${salt}$${hex(bits)}`; };
-    const passwordVerify = async(password,stored)=>{const p=String(stored||'').split('$');if(p.length!==4||p[0]!=='pbkdf2')return false;const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:bytes(p[2]),iterations:Number(p[1]),hash:'SHA-256'},key,256);return hex(bits)===p[3];};
-    const setSessionCookie=(token,maxAge)=>`__Host-iecg=${token}; Max-Age=${maxAge}; Path=/; HttpOnly; Secure; SameSite=Lax`;
-    const sessionToken=request.headers.get('Cookie')?.match(/(?:^|;\s*)__Host-iecg=([^;]+)/)?.[1]||null;
-    const authUser=async()=>{if(!env.DB||!sessionToken)return null;const th=await sha256(sessionToken);return await env.DB.prepare('SELECT u.id,u.full_name,u.username,u.email,u.role,u.active FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.active=1').bind(th,new Date().toISOString()).first()};
-    const audit=async(user,action,entity,id,details)=>{try{await env.DB.prepare('INSERT INTO audit_logs (user_id,action,entity,entity_id,details) VALUES (?,?,?,?,?)').bind(user?.id||null,action,entity,id||null,details||null).run()}catch(_){}};
-    const requireAuth=async(admin=false)=>{const u=await authUser();if(!u)return [null,json({error:'Não autenticado.'},401)];if(admin&&u.role!=='administrador')return [null,json({error:'Acesso exclusivo do administrador.'},403)];return [u,null]};
-    const list=async(table)=>{const allowed=['students','teachers','employees','courses'];if(!allowed.includes(table))throw new Error('Tabela inválida');return (await env.DB.prepare(`SELECT * FROM ${table} ORDER BY id DESC LIMIT 500`).all()).results};
-    const createSimple=async(table,b)=>{const specs={students:['full_name','cpf','birth_date','email','phone','address','status','notes'],teachers:['full_name','cpf','email','phone','professional_registration','status','notes'],employees:['full_name','cpf','birth_date','email','phone','address','job_title','hire_date','salary','payment_method','status','notes'],courses:['name','description','duration','modality','status']};const cols=specs[table];const vals=cols.map(c=>b[c]??(c==='status'?'ativo':null));const r=await env.DB.prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(()=>'?').join(',')})`).bind(...vals).run();return r.meta.last_row_id};
-    const api=async()=>{
-      if(!env.DB)return json({error:'Banco D1 não configurado no Worker.'},500);
-      const p=url.pathname,m=request.method;
-      if(p==='/api/health'&&m==='GET'){try{const r=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();return json({ok:true,database:'connected',tables:r.results.map(x=>x.name),timestamp:new Date().toISOString()})}catch(e){return json({ok:false,error:e.message},500)}}
-      if(p==='/api/auth/setup'&&m==='POST'){const b=await readJson();const n=await env.DB.prepare('SELECT COUNT(*) total FROM users').first();if(Number(n?.total)>0)return json({error:'A configuração inicial já foi concluída.'},409);if(!b.full_name||!b.username||!b.password)return json({error:'Preencha nome, usuário e senha.'},400);if(b.password!==b.password_confirmation)return json({error:'As senhas não coincidem.'},400);if(String(b.password).length<8)return json({error:'Use uma senha com pelo menos 8 caracteres.'},400);const username=String(b.username).trim().toLowerCase();const ph=await passwordHash(b.password);const r=await env.DB.prepare('INSERT INTO users (full_name,username,password_hash,role,active) VALUES (?,?,?,?,1)').bind(String(b.full_name).trim(),username,ph,'administrador').run();await audit({id:r.meta.last_row_id},'create','users',r.meta.last_row_id,'Primeiro administrador');return json({ok:true},201)}
-      if(p==='/api/auth/login'&&m==='POST'){const b=await readJson();const login=String(b.login||'').trim().toLowerCase();const u=await env.DB.prepare('SELECT * FROM users WHERE lower(username)=? OR lower(email)=? LIMIT 1').bind(login,login).first();if(!u||!u.active||!(await passwordVerify(String(b.password||''),u.password_hash)))return json({error:'Usuário ou senha inválidos.'},401);const token=randomToken(),th=await sha256(token),exp=new Date(Date.now()+8*60*60*1000).toISOString();await env.DB.prepare('INSERT INTO sessions (user_id,token_hash,expires_at,last_seen_at) VALUES (?,?,?,?,?)').bind(u.id,th,exp,new Date().toISOString()).run();await audit(u,'login','users',u.id,'Login');return json({ok:true,user:{id:u.id,full_name:u.full_name,username:u.username,email:u.email,role:u.role}},200,{'Set-Cookie':setSessionCookie(token,8*60*60)})}
-      if(p==='/api/auth/logout'&&m==='POST'){const u=await authUser();if(sessionToken)await env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(await sha256(sessionToken)).run();if(u)await audit(u,'logout','users',u.id,'Logout');return json({ok:true},200,{'Set-Cookie':setSessionCookie('',0)})}
-      if(p==='/api/auth/me'&&m==='GET'){const u=await authUser();return u?json({user:u}):json({user:null},401)}
-      const [user,authErr]=await requireAuth();if(authErr)return authErr;
-      if(p==='/api/dashboard'&&m==='GET'){const [s,e,f,r]=await Promise.all([env.DB.prepare("SELECT COUNT(*) total FROM students WHERE status='ativo'").first(),env.DB.prepare('SELECT COUNT(*) total FROM enrollments').first(),env.DB.prepare("SELECT COUNT(*) total FROM employees WHERE status!='desligado'").first(),env.DB.prepare("SELECT COALESCE(SUM(final_amount),0) total FROM financial_entries WHERE status!='cancelado'").first()]);return json({counts:{students:Number(s?.total||0),enrollments:Number(e?.total||0),employees:Number(f?.total||0),revenue:Number(r?.total||0)}})}
-      if(p==='/api/users'&&m==='GET'){const [u,err]=await requireAuth(true);if(err)return err;const r=await env.DB.prepare('SELECT id,full_name,username,email,role,active,created_at FROM users ORDER BY id DESC').all();return json({results:r.results})}
-      if(p==='/api/users'&&m==='POST'){const [u,err]=await requireAuth(true);if(err)return err;const b=await readJson();if(!b.full_name||!b.username||!b.password)return json({error:'Nome, usuário e senha são obrigatórios.'},400);if(String(b.password).length<8)return json({error:'A senha deve ter pelo menos 8 caracteres.'},400);const ph=await passwordHash(b.password);try{const r=await env.DB.prepare('INSERT INTO users (full_name,username,email,password_hash,role,active) VALUES (?,?,?,?,?,1)').bind(String(b.full_name).trim(),String(b.username).trim().toLowerCase(),b.email||null,ph,b.role||'aluno').run();await audit(u,'create','users',r.meta.last_row_id,'Usuário');return json({ok:true,id:r.meta.last_row_id},201)}catch(e){return json({error:'Não foi possível criar o usuário. Verifique duplicidade de usuário/e-mail.'},409)}}
-      const userPatch=p.match(/^\/api\/users\/(\d+)$/);if(userPatch&&m==='PATCH'){const [u,err]=await requireAuth(true);if(err)return err;const b=await readJson();if(Number(userPatch[1])===u.id&&Number(b.active)===0)return json({error:'Não é possível desativar sua própria conta.'},400);await env.DB.prepare('UPDATE users SET active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(Number(b.active)?1:0,Number(userPatch[1])).run();await audit(u,'update','users',Number(userPatch[1]),'Status alterado');return json({ok:true})}
-      if(p==='/api/students'&&m==='GET')return json({results:await list('students')});
-      if(p==='/api/teachers'&&m==='GET')return json({results:await list('teachers')});
-      if(p==='/api/employees'&&m==='GET')return json({results:await list('employees')});
-      if(p==='/api/courses'&&m==='GET')return json({results:await list('courses')});
-      const simplePost={students:'Alunos',teachers:'Professores',employees:'Funcionários',courses:'Cursos'};for(const table of Object.keys(simplePost)){if(p===`/api/${table}`&&m==='POST'){const [u,err]=await requireAuth(true);if(err)return err;const b=await readJson();const required=table==='courses'?b.name:b.full_name;if(!required)return json({error:'Campo obrigatório não informado.'},400);try{const id=await createSimple(table,b);await audit(u,'create',table,id,simplePost[table]);return json({ok:true,id},201)}catch(e){return json({error:'Não foi possível salvar. Verifique dados duplicados ou inválidos.'},409)}}}
-      if(p==='/api/enrollments'&&m==='GET'){const r=await env.DB.prepare('SELECT e.*,s.full_name student_name,c.name course_name FROM enrollments e JOIN students s ON s.id=e.student_id JOIN courses c ON c.id=e.course_id ORDER BY e.id DESC').all();return json({results:r.results})}
-      if(p==='/api/enrollments'&&m==='POST'){const [u,err]=await requireAuth(true);if(err)return err;const b=await readJson();if(!b.student_id||!b.course_id)return json({error:'Aluno e curso são obrigatórios.'},400);try{const r=await env.DB.prepare('INSERT INTO enrollments (student_id,course_id,enrollment_number,start_date,status,notes) VALUES (?,?,?,?,?,?)').bind(Number(b.student_id),Number(b.course_id),b.enrollment_number||null,b.start_date||null,b.status||'ativa',b.notes||null).run();await audit(u,'create','enrollments',r.meta.last_row_id,'Matrícula');return json({ok:true,id:r.meta.last_row_id},201)}catch(e){return json({error:'Não foi possível criar a matrícula.'},409)}}
-      if(p==='/api/financial'&&m==='GET'){const r=await env.DB.prepare('SELECT f.*,s.full_name student_name FROM financial_entries f LEFT JOIN students s ON s.id=f.student_id ORDER BY f.id DESC').all();return json({results:r.results})}
-      if(p==='/api/financial'&&m==='POST'){const [u,err]=await requireAuth(true);if(err)return err;const b=await readJson();if(!b.description)return json({error:'Descrição é obrigatória.'},400);const amount=Math.max(0,Number(b.amount||0)),discount=Math.max(0,Number(b.discount||0)),final=Math.max(0,amount-discount);const r=await env.DB.prepare('INSERT INTO financial_entries (student_id,enrollment_id,reference,description,due_date,amount,discount,final_amount,paid_amount,paid_at,status,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').bind(b.student_id||null,b.enrollment_id||null,b.reference||null,String(b.description).trim(),b.due_date||null,amount,discount,final,Number(b.paid_amount||0),b.paid_at||null,b.status||'pendente',b.notes||null).run();await audit(u,'create','financial_entries',r.meta.last_row_id,'Financeiro');return json({ok:true,id:r.meta.last_row_id},201)}
-      const del=p.match(/^\/api\/(students|teachers|employees|courses|enrollments|financial)\/(\d+)$/);if(del&&m==='DELETE'){const [u,err]=await requireAuth(true);if(err)return err;const map={students:'students',teachers:'teachers',employees:'employees',courses:'courses',enrollments:'enrollments',financial:'financial_entries'},t=map[del[1]],id=Number(del[2]);if(del[1]==='courses'){const n=await env.DB.prepare('SELECT COUNT(*) total FROM enrollments WHERE course_id=?').bind(id).first();if(Number(n?.total)>0)return json({error:'Não é possível excluir um curso que possui matrículas.'},409)}await env.DB.prepare(`DELETE FROM ${t} WHERE id=?`).bind(id).run();await audit(u,'delete',t,id,'Exclusão');return json({ok:true})}
+    const now = () => new Date().toISOString();
+    const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store, max-age=0', ...headers } });
+    const security = (response) => {
+      const h = new Headers(response.headers);
+      h.set('X-Content-Type-Options', 'nosniff');
+      h.set('X-Frame-Options', 'SAMEORIGIN');
+      h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+      h.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+      h.set('Cross-Origin-Opener-Policy', 'same-origin');
+      h.set('Cross-Origin-Resource-Policy', 'same-origin');
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers: h });
+    };
+    const readJson = async () => { try { return await request.json(); } catch { return {}; } };
+    const text = (v, max = 2000) => String(v ?? '').trim().slice(0, max);
+    const positiveInt = v => Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null;
+    const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    const hexBytes = value => Uint8Array.from(String(value).match(/.{1,2}/g) || [], x => parseInt(x, 16));
+    const sha256 = async value => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(value))));
+    const randomToken = () => { const b = new Uint8Array(32); crypto.getRandomValues(b); return hex(b); };
+    const passwordHash = async password => {
+      const salt = new Uint8Array(16); crypto.getRandomValues(salt);
+      const saltHex = hex(salt);
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+      const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' }, key, 256);
+      return `pbkdf2$150000$${saltHex}$${hex(bits)}`;
+    };
+    const passwordVerify = async (password, stored) => {
+      const parts = String(stored || '').split('$');
+      if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false;
+      const iterations = Number(parts[1]); if (!Number.isFinite(iterations) || iterations < 10000) return false;
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+      const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: hexBytes(parts[2]), iterations, hash: 'SHA-256' }, key, 256);
+      return hex(bits) === parts[3];
+    };
+    const cookie = (token, age) => `__Host-iecg=${token}; Max-Age=${age}; Path=/; HttpOnly; Secure; SameSite=Lax`;
+    const sessionToken = request.headers.get('Cookie')?.match(/(?:^|;\s*)__Host-iecg=([^;]+)/)?.[1] || null;
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: {
+        'Access-Control-Allow-Origin': url.origin,
+        'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Max-Age': '86400'
+      }});
+    }
+
+    const db = env.DB;
+    const audit = async (user, action, entity, id = null, details = null) => {
+      try { await db.prepare('INSERT INTO audit_logs (user_id,action,entity,entity_id,details) VALUES (?,?,?,?,?)').bind(user?.id || null, action, entity, id, details ? text(details, 500) : null).run(); } catch {}
+    };
+    const authUser = async () => {
+      if (!db || !sessionToken) return null;
+      const th = await sha256(sessionToken);
+      const user = await db.prepare(`SELECT u.id,u.full_name,u.username,u.email,u.role,u.active,s.id session_id
+        FROM sessions s JOIN users u ON u.id=s.user_id
+        WHERE s.token_hash=? AND s.expires_at>? AND u.active=1 LIMIT 1`).bind(th, now()).first();
+      if (user) db.prepare('UPDATE sessions SET last_seen_at=? WHERE id=?').bind(now(), user.session_id).run().catch(() => {});
+      return user || null;
+    };
+    const requireUser = async (admin = false) => {
+      const user = await authUser();
+      if (!user) return [null, json({ error: 'Não autenticado.' }, 401)];
+      if (admin && user.role !== 'administrador') return [null, json({ error: 'Acesso exclusivo do administrador.' }, 403)];
+      return [user, null];
+    };
+    const cleanExpiredSessions = () => db?.prepare('DELETE FROM sessions WHERE expires_at<=?').bind(now()).run().catch(() => {});
+
+    const listRows = async (table, where = '', binds = [], limit = 500) => {
+      const allowed = ['students','teachers','employees','courses'];
+      if (!allowed.includes(table)) throw new Error('Tabela não permitida.');
+      return (await db.prepare(`SELECT * FROM ${table}${where ? ` WHERE ${where}` : ''} ORDER BY id DESC LIMIT ${Math.min(Math.max(Number(limit) || 500, 1), 500)}`).bind(...binds).all()).results;
+    };
+    const insertRow = async (table, payload, columns) => {
+      const cols = columns.filter(c => payload[c] !== undefined);
+      const vals = cols.map(c => payload[c]);
+      if (!cols.length) throw new Error('Nenhum campo informado.');
+      const r = await db.prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).bind(...vals).run();
+      return r.meta.last_row_id;
+    };
+    const patchRow = async (table, id, payload, allowed) => {
+      const entries = allowed.filter(c => payload[c] !== undefined);
+      if (!entries.length) return false;
+      const vals = entries.map(c => payload[c]);
+      const r = await db.prepare(`UPDATE ${table} SET ${entries.map(c => `${c}=?`).join(',')}, updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(...vals, id).run();
+      return Boolean(r.meta.changes);
+    };
+
+    const api = async () => {
+      if (!db) return json({ error: 'Banco D1 não configurado no Worker.' }, 500);
+      cleanExpiredSessions();
+      const p = url.pathname, m = request.method;
+
+      if (p === '/api/health' && m === 'GET') {
+        try {
+          const tables = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();
+          return json({ ok: true, database: 'connected', tables: tables.results.map(x => x.name), timestamp: now() });
+        } catch (e) { return json({ ok: false, error: e.message }, 500); }
+      }
+      if (p === '/api/system' && m === 'GET') {
+        const [users, students, teachers, employees, courses, enrollments, financial, sessions] = await Promise.all([
+          db.prepare('SELECT COUNT(*) total FROM users').first(), db.prepare('SELECT COUNT(*) total FROM students').first(),
+          db.prepare('SELECT COUNT(*) total FROM teachers').first(), db.prepare('SELECT COUNT(*) total FROM employees').first(),
+          db.prepare('SELECT COUNT(*) total FROM courses').first(), db.prepare('SELECT COUNT(*) total FROM enrollments').first(),
+          db.prepare('SELECT COUNT(*) total FROM financial_entries').first(), db.prepare('SELECT COUNT(*) total FROM sessions WHERE expires_at>?').bind(now()).first()
+        ]);
+        return json({ ok: true, counts: Object.fromEntries([['users',users],['students',students],['teachers',teachers],['employees',employees],['courses',courses],['enrollments',enrollments],['financial',financial],['sessions',sessions]].map(([k,v]) => [k, Number(v?.total || 0)])), timestamp: now() });
+      }
+
+      if (p === '/api/auth/setup' && m === 'POST') {
+        const body = await readJson();
+        const count = await db.prepare('SELECT COUNT(*) total FROM users').first();
+        if (Number(count?.total) > 0) return json({ error: 'A configuração inicial já foi concluída.' }, 409);
+        const full_name = text(body.full_name, 160), username = text(body.username, 100).toLowerCase(), password = String(body.password || '');
+        if (!full_name || !username || password.length < 8) return json({ error: 'Informe nome, usuário e senha com pelo menos 8 caracteres.' }, 400);
+        if (password !== String(body.password_confirmation || '')) return json({ error: 'As senhas não coincidem.' }, 400);
+        try {
+          const ph = await passwordHash(password);
+          const r = await db.prepare('INSERT INTO users (full_name,username,password_hash,role,active) VALUES (?,?,?,?,1)').bind(full_name, username, ph, 'administrador').run();
+          await audit({ id: r.meta.last_row_id }, 'create', 'users', r.meta.last_row_id, 'Primeiro administrador');
+          return json({ ok: true }, 201);
+        } catch { return json({ error: 'Não foi possível criar o administrador.' }, 409); }
+      }
+      if (p === '/api/auth/login' && m === 'POST') {
+        const body = await readJson(); const login = text(body.login, 120).toLowerCase(); const password = String(body.password || '');
+        const u = await db.prepare('SELECT * FROM users WHERE lower(username)=? OR lower(email)=? LIMIT 1').bind(login, login).first();
+        if (!u || !u.active || !(await passwordVerify(password, u.password_hash))) return json({ error: 'Usuário ou senha inválidos.' }, 401);
+        const token = randomToken(), th = await sha256(token), expires = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+        await db.prepare('INSERT INTO sessions (user_id,token_hash,expires_at,last_seen_at) VALUES (?,?,?,?)').bind(u.id, th, expires, now()).run();
+        await audit(u, 'login', 'users', u.id, 'Login');
+        return json({ ok: true, user: { id:u.id, full_name:u.full_name, username:u.username, email:u.email, role:u.role } }, 200, { 'Set-Cookie': cookie(token, 8 * 60 * 60) });
+      }
+      if (p === '/api/auth/logout' && m === 'POST') {
+        const u = await authUser(); if (sessionToken) await db.prepare('DELETE FROM sessions WHERE token_hash=?').bind(await sha256(sessionToken)).run();
+        if (u) await audit(u, 'logout', 'users', u.id, 'Logout');
+        return json({ ok:true }, 200, { 'Set-Cookie': cookie('', 0) });
+      }
+      if (p === '/api/auth/me' && m === 'GET') { const u = await authUser(); return u ? json({ user:u }) : json({ user:null }, 401); }
+      if (p === '/api/auth/change-password' && m === 'POST') {
+        const [u, err] = await requireUser(); if (err) return err; const b = await readJson(); const oldPass = String(b.current_password || ''), newPass = String(b.new_password || '');
+        if (newPass.length < 8) return json({error:'A nova senha deve ter pelo menos 8 caracteres.'},400);
+        const current = await db.prepare('SELECT password_hash FROM users WHERE id=?').bind(u.id).first();
+        if (!(await passwordVerify(oldPass, current?.password_hash))) return json({error:'Senha atual inválida.'},400);
+        await db.prepare('UPDATE users SET password_hash=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(await passwordHash(newPass), u.id).run();
+        if(sessionToken) await db.prepare('DELETE FROM sessions WHERE user_id=? AND token_hash!=?').bind(u.id, await sha256(sessionToken)).run();
+        await audit(u,'change-password','users',u.id,'Senha alterada'); return json({ok:true});
+      }
+
+      const [user, authErr] = await requireUser(); if (authErr) return authErr;
+      if (p === '/api/dashboard' && m === 'GET') {
+        const [students, enrollments, employees, financial, overdue, recent] = await Promise.all([
+          db.prepare("SELECT COUNT(*) total FROM students WHERE status='ativo'").first(), db.prepare("SELECT COUNT(*) total FROM enrollments WHERE status!='cancelada'").first(),
+          db.prepare("SELECT COUNT(*) total FROM employees WHERE status NOT IN ('desligado','inativo')").first(), db.prepare("SELECT COALESCE(SUM(final_amount),0) total FROM financial_entries WHERE status!='cancelado'").first(),
+          db.prepare("SELECT COUNT(*) total FROM financial_entries WHERE status='atrasado' OR (due_date < date('now') AND status IN ('pendente','parcial'))").first(),
+          db.prepare('SELECT action,entity,entity_id,details,created_at FROM audit_logs ORDER BY id DESC LIMIT 8').all()
+        ]);
+        return json({ counts:{students:Number(students?.total||0),enrollments:Number(enrollments?.total||0),employees:Number(employees?.total||0),revenue:Number(financial?.total||0),overdue:Number(overdue?.total||0)}, recent:recent.results });
+      }
+      if (p === '/api/users' && m === 'GET') { const [u,e] = await requireUser(true); if (e) return e; return json({ results:(await db.prepare('SELECT id,full_name,username,email,role,active,created_at,updated_at FROM users ORDER BY id DESC').all()).results }); }
+      if (p === '/api/users' && m === 'POST') {
+        const [u,e] = await requireUser(true); if (e) return e; const b=await readJson(); const full_name=text(b.full_name,160),username=text(b.username,100).toLowerCase(),password=String(b.password||'');
+        if(!full_name||!username||password.length<8) return json({error:'Nome, usuário e senha (mínimo 8 caracteres) são obrigatórios.'},400);
+        if(!['administrador','professor','aluno'].includes(b.role)) return json({error:'Perfil inválido.'},400);
+        try { const id=await insertRow('users',{full_name,username,email:text(b.email,160)||null,password_hash:await passwordHash(password),role:b.role,active:1},['full_name','username','email','password_hash','role','active']); await audit(u,'create','users',id,'Usuário'); return json({ok:true,id},201); } catch { return json({error:'Usuário ou e-mail já cadastrado.'},409); }
+      }
+      const userIdMatch=p.match(/^\/api\/users\/(\d+)$/); if(userIdMatch && m==='PATCH') { const [u,e]=await requireUser(true); if(e)return e; const id=Number(userIdMatch[1]),b=await readJson(); if(id===u.id&&Number(b.active)===0)return json({error:'Não é possível desativar sua própria conta.'},400); const changed=await patchRow('users',id,{active:Number(b.active)?1:0},['active']); if(!changed)return json({error:'Usuário não encontrado.'},404); await audit(u,'update','users',id,'Status alterado'); return json({ok:true}); }
+
+      const simple = {
+        students:{cols:['full_name','cpf','birth_date','email','phone','address','status','notes'],required:'full_name'},
+        teachers:{cols:['full_name','cpf','email','phone','professional_registration','status','notes'],required:'full_name'},
+        employees:{cols:['full_name','cpf','birth_date','email','phone','address','job_title','hire_date','salary','payment_method','status','notes'],required:'full_name'},
+        courses:{cols:['name','description','duration','modality','status'],required:'name'}
+      };
+      for (const [table,cfg] of Object.entries(simple)) {
+        if (p === `/api/${table}` && m === 'GET') return json({results:await listRows(table)});
+        if (p === `/api/${table}` && m === 'POST') {
+          if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403); const b=await readJson(); if(!text(b[cfg.required]))return json({error:'Campo obrigatório não informado.'},400);
+          const payload={...b}; if(payload.status===undefined)payload.status='ativo'; try{const id=await insertRow(table,payload,cfg.cols);await audit(user,'create',table,id,'Cadastro');return json({ok:true,id},201);}catch{return json({error:'Não foi possível salvar. Verifique duplicidade ou dados inválidos.'},409);}
+        }
+        const match=p.match(new RegExp(`^/api/${table}/(\\d+)$`));
+        if(match&&m==='PATCH'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);const id=Number(match[1]),b=await readJson();if(cfg.required&&b[cfg.required]!==undefined&&!text(b[cfg.required]))return json({error:'Campo obrigatório não informado.'},400);try{const changed=await patchRow(table,id,b,cfg.cols);if(!changed)return json({error:'Registro não encontrado.'},404);await audit(user,'update',table,id,'Atualização');return json({ok:true});}catch{return json({error:'Não foi possível atualizar o registro.'},409);}}
+        if(match&&m==='DELETE'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);const id=Number(match[1]);if(table==='courses'){const n=await db.prepare('SELECT COUNT(*) total FROM enrollments WHERE course_id=?').bind(id).first();if(Number(n?.total)>0)return json({error:'Não é possível excluir curso com matrícula vinculada.'},409);}try{await db.prepare(`DELETE FROM ${table} WHERE id=?`).bind(id).run();await audit(user,'delete',table,id,'Exclusão');return json({ok:true});}catch{return json({error:'Não foi possível excluir.'},409);}}
+      }
+
+      if(p==='/api/enrollments'&&m==='GET'){const r=await db.prepare(`SELECT e.*,s.full_name student_name,c.name course_name FROM enrollments e JOIN students s ON s.id=e.student_id JOIN courses c ON c.id=e.course_id ORDER BY e.id DESC LIMIT 500`).all();return json({results:r.results});}
+      if(p==='/api/enrollments'&&m==='POST'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);const b=await readJson();if(!positiveInt(b.student_id)||!positiveInt(b.course_id))return json({error:'Aluno e curso são obrigatórios.'},400);try{const id=await insertRow('enrollments',{student_id:Number(b.student_id),course_id:Number(b.course_id),enrollment_number:text(b.enrollment_number,80)||null,start_date:text(b.start_date,20)||null,end_date:text(b.end_date,20)||null,monthly_amount:b.monthly_amount===undefined?null:Number(b.monthly_amount)||0,total_course_amount:b.total_course_amount===undefined?null:Number(b.total_course_amount)||0,installment_count:b.installment_count===undefined?null:Number(b.installment_count)||0,discount_percent:b.discount_percent===undefined?null:Number(b.discount_percent)||0,status:b.status||'ativa',notes:text(b.notes,2000)||null},['student_id','course_id','enrollment_number','start_date','end_date','monthly_amount','total_course_amount','installment_count','discount_percent','status','notes']);await audit(user,'create','enrollments',id,'Matrícula');return json({ok:true,id},201);}catch{return json({error:'Não foi possível criar a matrícula. Verifique duplicidade.'},409);}}
+      const em=p.match(/^\/api\/enrollments\/(\d+)$/);if(em&&m==='PATCH'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);try{const changed=await patchRow('enrollments',Number(em[1]),await readJson(),['student_id','course_id','enrollment_number','start_date','end_date','monthly_amount','total_course_amount','installment_count','discount_percent','status','notes']);if(!changed)return json({error:'Matrícula não encontrada.'},404);await audit(user,'update','enrollments',Number(em[1]),'Atualização');return json({ok:true});}catch{return json({error:'Não foi possível atualizar a matrícula.'},409);}}
+      if(em&&m==='DELETE'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);await db.prepare('DELETE FROM enrollments WHERE id=?').bind(Number(em[1])).run();await audit(user,'delete','enrollments',Number(em[1]),'Exclusão');return json({ok:true});}
+
+      if(p==='/api/financial'&&m==='GET'){const r=await db.prepare('SELECT f.*,s.full_name student_name FROM financial_entries f LEFT JOIN students s ON s.id=f.student_id ORDER BY f.id DESC LIMIT 500').all();return json({results:r.results});}
+      if(p==='/api/financial'&&m==='POST'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);const b=await readJson();const amount=Math.max(0,Number(b.amount||0)),discount=Math.max(0,Number(b.discount||0)),finalAmount=Math.max(0,amount-discount),paid=Math.max(0,Number(b.paid_amount||0));if(!text(b.description,200))return json({error:'Descrição é obrigatória.'},400);const status=['pendente','parcial','pago','atrasado','cancelado'].includes(b.status)?b.status:'pendente';try{const id=await insertRow('financial_entries',{student_id:positiveInt(b.student_id),enrollment_id:positiveInt(b.enrollment_id),reference:text(b.reference,100)||null,description:text(b.description,200),due_date:text(b.due_date,20)||null,amount,discount,final_amount:finalAmount,paid_amount:paid,paid_at:b.paid_at||null,status,notes:text(b.notes,2000)||null},['student_id','enrollment_id','reference','description','due_date','amount','discount','final_amount','paid_amount','paid_at','status','notes']);await audit(user,'create','financial_entries',id,'Financeiro');return json({ok:true,id},201);}catch{return json({error:'Não foi possível salvar o lançamento.'},409);}}
+      const fm=p.match(/^\/api\/financial\/(\d+)$/);if(fm&&m==='PATCH'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);try{const b=await readJson();if(b.amount!==undefined||b.discount!==undefined){const current=await db.prepare('SELECT amount,discount FROM financial_entries WHERE id=?').bind(Number(fm[1])).first();const amount=b.amount===undefined?Number(current?.amount||0):Math.max(0,Number(b.amount||0)),discount=b.discount===undefined?Number(current?.discount||0):Math.max(0,Number(b.discount||0));b.final_amount=Math.max(0,amount-discount);}if(b.status==='pago'&&b.paid_at===undefined)b.paid_at=now();const changed=await patchRow('financial_entries',Number(fm[1]),b,['student_id','enrollment_id','reference','description','due_date','amount','discount','final_amount','paid_amount','paid_at','status','notes']);if(!changed)return json({error:'Lançamento não encontrado.'},404);await audit(user,'update','financial_entries',Number(fm[1]),'Atualização');return json({ok:true});}catch{return json({error:'Não foi possível atualizar o lançamento.'},409);}}
+      if(fm&&m==='DELETE'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);await db.prepare('DELETE FROM financial_entries WHERE id=?').bind(Number(fm[1])).run();await audit(user,'delete','financial_entries',Number(fm[1]),'Exclusão');return json({ok:true});}
+
+      if(p==='/api/classes'&&m==='GET'){const r=await db.prepare(`SELECT c.*,co.name course_name,t.full_name teacher_name FROM classes c JOIN courses co ON co.id=c.course_id LEFT JOIN teachers t ON t.id=c.teacher_id ORDER BY c.id DESC LIMIT 300`).all();return json({results:r.results});}
+      if(p==='/api/classes'&&m==='POST'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);const b=await readJson();if(!positiveInt(b.course_id)||!text(b.name,160))return json({error:'Curso e nome da turma são obrigatórios.'},400);try{const id=await insertRow('classes',{course_id:Number(b.course_id),teacher_id:positiveInt(b.teacher_id),name:text(b.name,160),schedule:text(b.schedule,160)||null,classroom:text(b.classroom,120)||null,status:b.status||'ativa'},['course_id','teacher_id','name','schedule','classroom','status']);await audit(user,'create','classes',id,'Turma');return json({ok:true,id},201);}catch{return json({error:'Não foi possível criar a turma.'},409);}}
+      const cm=p.match(/^\/api\/classes\/(\d+)$/);if(cm&&m==='PATCH'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);try{const changed=await patchRow('classes',Number(cm[1]),await readJson(),['course_id','teacher_id','name','schedule','classroom','status']);if(!changed)return json({error:'Turma não encontrada.'},404);await audit(user,'update','classes',Number(cm[1]),'Atualização');return json({ok:true});}catch{return json({error:'Não foi possível atualizar a turma.'},409);}}if(cm&&m==='DELETE'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);await db.prepare('DELETE FROM classes WHERE id=?').bind(Number(cm[1])).run();await audit(user,'delete','classes',Number(cm[1]),'Exclusão');return json({ok:true});}
+
+      if(p==='/api/lessons'&&m==='GET'){const r=await db.prepare(`SELECT l.*,c.name class_name FROM lessons l JOIN classes c ON c.id=l.class_id ORDER BY l.id DESC LIMIT 500`).all();return json({results:r.results});}
+      if(p==='/api/lessons'&&m==='POST'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);const b=await readJson();if(!positiveInt(b.class_id)||!text(b.title,200))return json({error:'Turma e título são obrigatórios.'},400);try{const id=await insertRow('lessons',{class_id:Number(b.class_id),title:text(b.title,200),description:text(b.description,3000)||null,content_url:text(b.content_url,1000)||null,lesson_date:text(b.lesson_date,40)||null},['class_id','title','description','content_url','lesson_date']);await audit(user,'create','lessons',id,'Aula');return json({ok:true,id},201);}catch{return json({error:'Não foi possível criar a aula.'},409);}}
+      const lm=p.match(/^\/api\/lessons\/(\d+)$/);if(lm&&m==='PATCH'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);try{const changed=await patchRow('lessons',Number(lm[1]),await readJson(),['class_id','title','description','content_url','lesson_date']);if(!changed)return json({error:'Aula não encontrada.'},404);await audit(user,'update','lessons',Number(lm[1]),'Atualização');return json({ok:true});}catch{return json({error:'Não foi possível atualizar a aula.'},409);}}if(lm&&m==='DELETE'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);await db.prepare('DELETE FROM lessons WHERE id=?').bind(Number(lm[1])).run();await audit(user,'delete','lessons',Number(lm[1]),'Exclusão');return json({ok:true});}
+
+      if(p==='/api/documents'&&m==='GET'){const r=await db.prepare('SELECT * FROM documents ORDER BY id DESC LIMIT 500').all();return json({results:r.results});}
+      if(p==='/api/documents'&&m==='POST'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);const b=await readJson();if(!text(b.document_type,100)||!text(b.document_name,200))return json({error:'Tipo e nome do documento são obrigatórios.'},400);try{const id=await insertRow('documents',{student_id:positiveInt(b.student_id),enrollment_id:positiveInt(b.enrollment_id),document_type:text(b.document_type,100),document_name:text(b.document_name,200),storage_key:text(b.storage_key,500)||null},['student_id','enrollment_id','document_type','document_name','storage_key']);await audit(user,'create','documents',id,'Documento');return json({ok:true,id},201);}catch{return json({error:'Não foi possível registrar o documento.'},409);}}
+      const dm=p.match(/^\/api\/documents\/(\d+)$/);if(dm&&m==='DELETE'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);await db.prepare('DELETE FROM documents WHERE id=?').bind(Number(dm[1])).run();await audit(user,'delete','documents',Number(dm[1]),'Exclusão');return json({ok:true});}
+
+      if(p==='/api/teacher-courses'&&m==='GET'){const r=await db.prepare(`SELECT tc.*,t.full_name teacher_name,c.name course_name FROM teacher_courses tc JOIN teachers t ON t.id=tc.teacher_id JOIN courses c ON c.id=tc.course_id ORDER BY tc.id DESC`).all();return json({results:r.results});}
+      if(p==='/api/teacher-courses'&&m==='POST'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);const b=await readJson();if(!positiveInt(b.teacher_id)||!positiveInt(b.course_id))return json({error:'Professor e curso são obrigatórios.'},400);try{const id=await insertRow('teacher_courses',{teacher_id:Number(b.teacher_id),course_id:Number(b.course_id),start_date:text(b.start_date,20)||null,end_date:text(b.end_date,20)||null,status:b.status||'ativo'},['teacher_id','course_id','start_date','end_date','status']);await audit(user,'create','teacher_courses',id,'Vínculo professor-curso');return json({ok:true,id},201);}catch{return json({error:'Esse vínculo já existe ou não é válido.'},409);}}
+      const tcm=p.match(/^\/api\/teacher-courses\/(\d+)$/);if(tcm&&m==='DELETE'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);await db.prepare('DELETE FROM teacher_courses WHERE id=?').bind(Number(tcm[1])).run();await audit(user,'delete','teacher_courses',Number(tcm[1]),'Exclusão');return json({ok:true});}
+
+      if(p==='/api/audit'&&m==='GET'){if(user.role!=='administrador')return json({error:'Acesso exclusivo do administrador.'},403);const r=await db.prepare(`SELECT a.*,u.full_name user_name FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 300`).all();return json({results:r.results});}
       return json({error:'Rota da API não encontrada.'},404);
     };
-    if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':url.origin,'Access-Control-Allow-Methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'Content-Type','Access-Control-Allow-Credentials':'true','Access-Control-Max-Age':'86400'}});
-    if(url.pathname.startsWith('/api/'))return api();
-    const publicHosts=new Set(['institutocanogrande.com.br','www.institutocanogrande.com.br']),adminHosts=new Set(['portal.institutocanogrande.com.br','admin.institutocanogrande.com.br']);
-    const inject=async(page,mode)=>{if(!page.ok)return security(page);return security(new HTMLRewriter().on('body',{element(el){el.append(`<script src="/app-polish.js" defer></script>`,{html:true});if(mode==='portal')el.append(`<script src="/portal-dashboard-pro.js" defer></script>`,{html:true});}}).transform(page));};
-    if(publicHosts.has(host)){if(['/','/instituto','/site','/home'].includes(url.pathname)){const page=await env.ASSETS.fetch(new Request(new URL('/landing.html',request.url),request));return inject(page,'landing')}if(['/portal','/admin','/login'].includes(url.pathname))return Response.redirect('https://portal.institutocanogrande.com.br/',302)}
-    if(adminHosts.has(host)){if(['/','/portal','/admin','/administrativo','/login'].includes(url.pathname)){const page=await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request));return inject(page,'portal')}if(['/instituto','/site'].includes(url.pathname))return Response.redirect('https://institutocanogrande.com.br/',302)}
-    if(url.pathname==='/index.html')return Response.redirect(new URL('/portal',url),301);if(url.pathname==='/landing.html')return Response.redirect(new URL('/instituto',url),301);if(url.pathname==='/')return Response.redirect(new URL('/instituto',url),302);if(url.pathname==='/login')return Response.redirect(new URL('/portal',url),302);if(url.pathname==='/portal'){const page=await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request));return inject(page,'portal')}if(url.pathname==='/instituto'){const page=await env.ASSETS.fetch(new Request(new URL('/landing.html',request.url),request));return inject(page,'landing')}
-    const blocked=['/src/','/database/','/migrations/','/wrangler.jsonc','/.git/'];if(blocked.some(x=>url.pathname===x||url.pathname.startsWith(x)))return new Response('Not Found',{status:404});const asset=await env.ASSETS.fetch(request);return asset.status===404?security(new Response('Página não encontrada.',{status:404,headers:{'Content-Type':'text/plain; charset=utf-8'}})):security(asset);
+
+    if (url.pathname.startsWith('/api/')) return api().then(security);
+
+    const publicHosts = new Set(['institutocanogrande.com.br','www.institutocanogrande.com.br']);
+    const adminHosts = new Set(['portal.institutocanogrande.com.br','admin.institutocanogrande.com.br']);
+    const inject = async (page, mode) => {
+      if (!page.ok) return security(page);
+      const out = new HTMLRewriter().on('body', { element(el) {
+        el.append('<script src="/app-polish.js" defer></script>', {html:true});
+        if (mode === 'portal') el.append('<script src="/portal-dashboard-pro.js" defer></script>', {html:true});
+      }}).transform(page);
+      return security(out);
+    };
+    if (publicHosts.has(host)) {
+      if (['/','/instituto','/site','/home'].includes(url.pathname)) return inject(await env.ASSETS.fetch(new Request(new URL('/landing.html', request.url), request)), 'landing');
+      if (['/portal','/admin','/login'].includes(url.pathname)) return Response.redirect('https://portal.institutocanogrande.com.br/',302);
+    }
+    if (adminHosts.has(host)) {
+      if (['/','/portal','/admin','/administrativo','/login'].includes(url.pathname)) return inject(await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request)), 'portal');
+      if (['/instituto','/site'].includes(url.pathname)) return Response.redirect('https://institutocanogrande.com.br/',302);
+    }
+    if (url.pathname === '/index.html') return Response.redirect(new URL('/portal', url), 301);
+    if (url.pathname === '/landing.html') return Response.redirect(new URL('/instituto', url), 301);
+    if (url.pathname === '/') return Response.redirect(new URL('/instituto', url), 302);
+    if (url.pathname === '/login') return Response.redirect(new URL('/portal', url), 302);
+    if (url.pathname === '/portal') return inject(await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request)), 'portal');
+    if (url.pathname === '/instituto') return inject(await env.ASSETS.fetch(new Request(new URL('/landing.html', request.url), request)), 'landing');
+    const blocked = ['/src/','/database/','/migrations/','/wrangler.jsonc','/.git/'];
+    if (blocked.some(x => url.pathname === x || url.pathname.startsWith(x))) return security(new Response('Not Found', {status:404}));
+    const asset = await env.ASSETS.fetch(request);
+    return asset.status === 404 ? security(new Response('Página não encontrada.', {status:404,headers:{'Content-Type':'text/plain; charset=utf-8'}})) : security(asset);
   }
 };
